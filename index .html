@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>臺灣遊蕩犬分析報告</title>
+    
+    <!-- 引入高質感字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Oswald:wght@700&display=swap" rel="stylesheet">
+    <!-- 引入 Leaflet (地圖套件) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- 引入 GSAP 與 ScrollTrigger (動畫套件) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <style>
+        /* 全域設定：紅灰主題色系 */
+        :root {
+            --bg-gray: #EAEAEA;      /* 淺灰底色 */
+            --bg-panel: #FFFFFF;     /* 純白面板 */
+            --text-dark: #333333;    /* 深灰文字 */
+            --text-light: #777777;   /* 淺灰文字 */
+            --accent-red: #D32F2F;   /* 鮮紅色 */
+            --accent-dark: #B71C1C;  /* 深紅色 */
+        }
+
+        body, html { 
+            margin: 0; padding: 0; 
+            background-color: var(--bg-gray); 
+            color: var(--text-dark);
+            font-family: 'Noto Sans TC', sans-serif; 
+            overflow: hidden; /* 隱藏整體卷軸，交給右側面板滾動 */
+        }
+
+        /* 左右分割排版 */
+        .split-layout {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* 左側固定區：灰底紅字巨型標題 */
+        .left-pane {
+            width: 40%;
+            background-color: var(--bg-gray);
+            padding: 5vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            position: relative;
+            border-right: 2px solid #CCCCCC;
+        }
+        
+        /* 幾何點陣裝飾 */
+        .left-pane::before {
+            content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            background-image: radial-gradient(#CCCCCC 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.5;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        h1.massive-title {
+            font-size: 7vw;
+            font-weight: 900;
+            color: var(--accent-dark);
+            line-height: 0.95;
+            margin: 0;
+            letter-spacing: -2px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.05);
+        }
+        
+        .author-tag {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.5vw;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin-top: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 右側滾動區：白底紅灰數據區 */
+        .right-pane {
+            width: 60%;
+            height: 100vh;
+            overflow-y: auto;
+            background-color: var(--bg-panel);
+            padding: 5vw;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        /* 巨型數字設計 */
+        .big-number-block { margin-bottom: 8vh; padding-left: 20px; border-left: 8px solid var(--accent-red);}
+        .big-number {
+            font-family: 'Oswald', sans-serif;
+            font-size: 7rem;
+            color: var(--accent-red);
+            line-height: 1;
+            margin-bottom: 5px;
+        }
+        .big-text { font-size: 1.5rem; font-weight: 900; color: var(--text-dark); margin-bottom: 10px;}
+        .desc-text { font-size: 1.05rem; color: var(--text-light); line-height: 1.8; margin-bottom: 20px;}
+
+        /* 地圖區塊 */
+        .chart-section { margin-top: 8vh; margin-bottom: 10vh;}
+        .chart-header { font-size: 2rem; font-weight: 900; color: var(--accent-dark); margin-bottom: 2vh; display: inline-block;}
+        
+        #map { 
+            height: 65vh; width: 100%; 
+            border: 1px solid #DDDDDD;
+            border-radius: 8px;
+            margin-bottom: 3vh; 
+            z-index: 1;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+        }
+
+        /* 圖表區塊突破：紅灰配色橫條圖 */
+        #customChart { display: flex; flex-direction: column; gap: 8px; margin-top: 30px;}
+        .bar-row {
+            display: flex; align-items: center;
+            background: #F9F9F9;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 4px;
+        }
+        .bar-row:hover { background: #F0F0F0; transform: translateX(5px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .bar-label { width: 100px; font-weight: 700; color: var(--text-dark); font-size: 1.1rem; }
+        .bar-track { flex-grow: 1; position: relative; height: 24px; background: #E0E0E0; border-radius: 12px; overflow: hidden;}
+        .bar-fill {
+            height: 100%; width: 0%; 
+            background: var(--accent-red);
+            position: relative;
+            border-radius: 12px;
+        }
+        .bar-value { width: 80px; text-align: right; font-family: 'Oswald', sans-serif; font-size: 1.3rem; color: var(--accent-dark); }
+
+        /* 頁尾 */
+        .footer {
+            margin-top: 10vh; padding: 5vh 0; border-top: 2px solid var(--bg-gray);
+            color: var(--text-light); font-size: 0.95rem; line-height: 2;
+        }
+        .footer strong { color: var(--accent-dark); font-size: 1.1rem;}
+
+        /* 響應式：手機版轉為上下堆疊 */
+        @media (max-width: 900px) {
+            .split-layout { flex-direction: column; overflow: auto; }
+            .left-pane { width: 100%; height: auto; min-height: 40vh; padding: 10vw; border-right: none; border-bottom: 2px solid #CCC;}
+            h1.massive-title { font-size: 15vw; }
+            .author-tag { font-size: 4vw; }
+            .right-pane { width: 100%; height: auto; overflow: visible; padding: 10vw; }
+            .big-number { font-size: 5rem; }
+            #map { height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="split-layout">
+    
+    <!-- 左側：灰底紅字巨型標題 -->
+    <div class="left-pane">
+        <div>
+            <h1 class="massive-title">臺灣<br>遊蕩犬<br>數據剖析</h1>
+        </div>
+        <div class="author-tag">Data Visualized By 劉大華</div>
+    </div>
+
+    <!-- 右側：資料流滾動區 -->
+    <div class="right-pane">
+        
+        <div class="big-number-block gsap-up">
+            <div class="big-number">141,584</div>
+            <div class="big-text">113年全國遊蕩犬總估計數</div>
+            <div class="desc-text">
+                本數據呈現遊蕩犬隻與地方管理資源的拉扯。全台破十萬的犬隻，考驗著地方政府與動保機構的收容極限。
+            </div>
+        </div>
+
+        <div class="chart-section gsap-up">
+            <div class="chart-header">地理分佈熱區 (動態泡泡圖)</div>
+            <div class="desc-text">
+                地圖上的紅色泡泡大小，<b>依據各地遊蕩犬數量動態縮放顯示</b>。根據農業部調查，中南部地區承受了最龐大的壓力，臺南市高達 19,990 隻居冠，泡泡面積也最為巨大，清楚指出需要資源挹注的熱區。
+            </div>
+            <div id="map"></div>
+        </div>
+
+        <div class="chart-section gsap-up">
+            <div class="chart-header">人犬密度對比 (隻/百人)</div>
+            <div class="desc-text">
+                當我們將視角切換至「每百人遊蕩犬數」，壓力輪廓瞬間改變。全國平均為 0.605 隻/百人，但人口較少的東部與農業縣市如臺東縣 (4.04)、嘉義縣 (3.50) 比例極高，潛在的人犬衝突風險更為嚴峻。
+            </div>
+            
+            <!-- GSAP 動態柱狀圖 -->
+            <div id="customChart"></div>
+        </div>
+
+        <div class="footer gsap-up">
+            <strong>資料來源：農業部動物保護資訊網 [1]</strong><br>
+            【113年各縣市遊蕩犬估計數調查結果】<br>
+            10014 臺北市中正區南海路 37 號 | (02)2381-2991<br>
+            讓「尊重生命 保護動物」理念成為生活的一部分
+        </div>
+
+    </div>
+</div>
+
+<script>
+    gsap.registerPlugin(ScrollTrigger);
+
+    // 113年遊蕩犬資料集 (來源：動物保護資訊網)
+    const data = [
+        { county: '新北市', pop: 4041120, total: 9982, per100: 0.25, lat: 25.0119, lng: 121.4566 },
+        { county: '臺北市', pop: 2511886, total: 1908, per100: 0.08, lat: 25.0329, lng: 121.5654 },
+        { county: '臺中市', pop: 2845909, total: 8542, per100: 0.30, lat: 24.1477, lng: 120.6736 },
+        { county: '臺南市', pop: 1859946, total: 19990, per100: 1.07, lat: 22.9997, lng: 120.2270 },
+        { county: '高雄市', pop: 2737941, total: 10200, per100: 0.37, lat: 22.6272, lng: 120.3014 },
+        { county: '桃園市', pop: 2317445, total: 7893, per100: 0.34, lat: 24.9936, lng: 121.3009 },
+        { county: '宜蘭縣', pop: 449890, total: 1630, per100: 0.36, lat: 24.7021, lng: 121.7377 },
+        { county: '新竹縣', pop: 589289, total: 2396, per100: 0.41, lat: 24.8383, lng: 121.0177 },
+        { county: '苗栗縣', pop: 534575, total: 7403, per100: 1.38, lat: 24.5601, lng: 120.8214 },
+        { county: '彰化縣', pop: 1239048, total: 9313, per100: 0.75, lat: 24.0517, lng: 120.5161 },
+        { county: '南投縣', pop: 477094, total: 9644, per100: 2.02, lat: 23.9036, lng: 120.6905 },
+        { county: '雲林縣', pop: 659468, total: 4934, per100: 0.75, lat: 23.7092, lng: 120.4313 },
+        { county: '嘉義縣', pop: 484560, total: 16944, per100: 3.50, lat: 23.4518, lng: 120.2554 },
+        { county: '屏東縣', pop: 794997, total: 10024, per100: 1.26, lat: 22.6728, lng: 120.4879 },
+        { county: '臺東縣', pop: 211544, total: 8551, per100: 4.04, lat: 22.7972, lng: 121.0713 },
+        { county: '花蓮縣', pop: 317489, total: 6983, per100: 2.20, lat: 23.9871, lng: 121.6010 },
+        { county: '澎湖縣', pop: 107739, total: 520, per100: 0.48, lat: 23.5711, lng: 119.5793 },
+        { county: '基隆市', pop: 362255, total: 3112, per100: 0.86, lat: 25.1276, lng: 121.7391 },
+        { county: '新竹市', pop: 456475, total: 516, per100: 0.11, lat: 24.8138, lng: 120.9675 },
+        { county: '嘉義市', pop: 263584, total: 906, per100: 0.34, lat: 23.4800, lng: 120.4491 },
+        { county: '金門縣', pop: 144149, total: 167, per100: 0.12, lat: 24.4491, lng: 118.3706 },
+        { county: '連江縣', pop: 14039, total: 26, per100: 0.19, lat: 26.1505, lng: 119.9360 }
+    ];
+
+    function getColor(total) {
+        return total > 10000 ? '#B71C1C' : // 深紅
+               total > 5000  ? '#D32F2F' : // 鮮紅
+               total > 1000  ? '#F44336' : // 淺紅
+                               '#999999';  // 灰色
+    }
+
+    // --- 1. 淺色底圖與動態泡泡圖 ---
+    const map = L.map('map').setView([23.6978, 120.9605], 7);
+    
+    // 改用 CartoDB 淺色底圖 (Light All)，確保地圖不為黑底且資訊清晰
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+    }).addTo(map);
+
+    data.forEach(item => {
+        // 【核心修改】泡泡大小隨數量動態變化
+        // 透過開根號計算確保視覺比例舒適 (最大約 39px，最小約 5px)
+        const bubbleRadius = Math.sqrt(item.total) / 4 + 4; 
+
+        L.circleMarker([item.lat, item.lng], {
+            radius: bubbleRadius,
+            fillColor: getColor(item.total),
+            color: '#FFFFFF', // 白色邊框讓泡泡在地圖上更立體凸出
+            weight: 1.5,
+            opacity: 1,
+            fillOpacity: 0.75
+        }).addTo(map).bindPopup(`
+            <b style="color:#D32F2F; font-size:16px;">${item.county}</b><br>
+            遊蕩犬數: <b>${item.total.toLocaleString()} 隻</b><br>
+            每百人比例: ${item.per100}
+        `);
+    });
+
+    // --- 2. 橫條圖：紅灰配色呈現 ---
+    const chartContainer = document.getElementById('customChart');
+    const sortedData = [...data].sort((a, b) => b.per100 - a.per100);
+    const maxPer100 = 4.5; 
+
+    sortedData.forEach((d, i) => {
+        const widthPercent = (d.per100 / maxPer100) * 100;
+        
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'bar-row';
+        rowDiv.onclick = () => alert(`【${d.county}】遊蕩犬估計數：${d.total.toLocaleString()} 隻`);
+        
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'bar-label';
+        labelDiv.innerText = d.county;
+        
+        const trackDiv = document.createElement('div');
+        trackDiv.className = 'bar-track';
+        
+        const fillDiv = document.createElement('div');
+        fillDiv.className = 'bar-fill';
+        fillDiv.dataset.width = widthPercent + '%'; 
+        
+        // 依照人犬比例高低，賦予深紅、鮮紅與灰色
+        if(d.per100 > 3) fillDiv.style.background = '#B71C1C';
+        else if (d.per100 > 1) fillDiv.style.background = '#D32F2F';
+        else fillDiv.style.background = '#999999';
+
+        trackDiv.appendChild(fillDiv);
+        
+        const valDiv = document.createElement('div');
+        valDiv.className = 'bar-value';
+        valDiv.innerText = d.per100;
+
+        rowDiv.appendChild(labelDiv);
+        rowDiv.appendChild(trackDiv);
+        rowDiv.appendChild(valDiv);
+        chartContainer.appendChild(rowDiv);
+    });
+
+    // --- 3. ScrollTrigger 進場特效 ---
+    // 右側內容隨滾動浮現
+    gsap.utils.toArray('.gsap-up').forEach(element => {
+        gsap.from(element, {
+            scrollTrigger: {
+                trigger: element,
+                scroller: ".right-pane", // 指定右側面板為滾動容器
+                start: "top 95%", 
+            },
+            y: 40,
+            opacity: 0,
+            duration: 0.8,
+            ease: "power2.out"
+        });
+    });
+
+    // 橫條圖進場平滑拉長
+    ScrollTrigger.create({
+        trigger: "#customChart",
+        scroller: ".right-pane",
+        start: "top 90%",
+        onEnter: () => {
+            gsap.to('.bar-fill', {
+                width: function(i, target) { return target.dataset.width; },
+                duration: 1.2, ease: "power3.out", stagger: 0.05
+            });
+        }
+    });
+
+</script>
+</body>
+</html>
